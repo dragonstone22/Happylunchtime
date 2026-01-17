@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WM플랫폼부 점심 당번 시스템</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f8fafc; --card-bg: #ffffff; --primary: #1d4ed8;
+            --primary-light: #eff6ff; --secondary: #64748b;
+            --accent: #e11d48; --text: #1e293b; --text-muted: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Pretendard', sans-serif; }
+        body { background-color: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; min-height: 100vh; }
+
+        .app-container { width: 100%; max-width: 520px; }
+
+        .sidebar { background: var(--card-bg); padding: 32px 24px; border-radius: 28px; border: 1px solid var(--border); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .logo { font-weight: 800; font-size: 1.6rem; margin-bottom: 20px; color: var(--primary); text-align: center; }
+        
+        .timer-banner { background: #fff1f2; color: var(--accent); padding: 12px; border-radius: 14px; margin-bottom: 24px; text-align: center; font-weight: 800; font-size: 0.85rem; border: 1px solid #fecdd3; }
+
+        .mode-selector { background: #f1f5f9; padding: 6px; border-radius: 14px; margin-bottom: 24px; display: flex; gap: 4px; }
+        .mode-btn { flex: 1; padding: 12px; border-radius: 10px; border: none; cursor: pointer; background: transparent; color: var(--text-muted); font-weight: 600; transition: all 0.2s; }
+        .mode-btn.active { background: var(--card-bg); color: var(--primary); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 0.85rem; color: var(--text); margin-bottom: 8px; font-weight: 700; }
+        select, input { width: 100%; padding: 14px; border-radius: 12px; background: #ffffff; border: 1px solid var(--border); color: var(--text); font-size: 1rem; }
+        
+        .date-range { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+        .btn { width: 100%; padding: 16px; border-radius: 12px; font-weight: 700; cursor: pointer; border: none; font-size: 1rem; transition: all 0.2s; }
+        .btn-primary { background: var(--primary); color: white; margin-top: 8px; }
+        .btn-reset { background: #fff1f2; color: var(--accent); margin-top: 12px; border: 1px solid #fecdd3; font-size: 0.85rem; }
+
+        .view-section { display: none; }
+        .view-section.active { display: block; }
+
+        .my-list { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 24px; }
+        .list-label { color: var(--primary); font-size: 0.9rem; font-weight: 800; margin-bottom: 12px; display: block; }
+        .v-item { background: #f8fafc; padding: 12px 18px; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border: 1px solid var(--border); }
+        .del-btn { color: var(--accent); background: #fff1f2; padding: 6px 10px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.75rem; font-weight: 700; }
+
+        .admin-box { background: #f1f5f9; padding: 15px; border-radius: 16px; margin-bottom: 20px; border: 1px solid var(--border); }
+
+        .stats-table { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 0.8rem; background: #f8fafc; border-radius: 12px; overflow: hidden; }
+        .stats-table th, .stats-table td { padding: 10px; border: 1px solid var(--border); text-align: center; }
+        .stats-table th { background: var(--primary-light); color: var(--primary); }
+
+        #adminCalendar { margin-top: 24px; display: none; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background: var(--border); padding: 4px; border-radius: 12px; margin-top: 12px; }
+        .day { background: white; padding: 4px; min-height: 70px; display: flex; flex-direction: column; align-items: center; }
+        .day span { font-size: 0.7rem; font-weight: 700; margin-bottom: 2px; }
+        .duty { font-size: 0.55rem; background: var(--primary-light); color: var(--primary); padding: 1px 3px; border-radius: 3px; margin-top: 1px; width: 100%; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="sidebar">
+        <div class="logo">🏦 WM 점심 당번 시스템</div>
+        <div id="timerBanner" class="timer-banner">⏳ 마감까지 <span id="ddayTimer">데이터 로딩 중...</span></div>
+        
+        <div class="mode-selector">
+            <button id="btnTeam" class="mode-btn active" onclick="switchMode('team')">휴가 등록</button>
+            <button id="btnAdmin" class="mode-btn" onclick="switchMode('admin')">관리자 모드</button>
+        </div>
+
+        <div id="teamSection" class="view-section active">
+            <div class="form-group"><label>본인 이름 선택</label>
+                <select id="myNameSelect" onchange="filterMyVacations()">
+                    <optgroup label="기획팀"><option>김설희</option><option>강용석</option><option>문경난</option><option>한일섭</option><option>이은형</option></optgroup>
+                    <optgroup label="개발팀"><option>서형준</option><option>김기항</option><option>김근영</option><option>박중언</option><option>박서영</option><option>강성우</option><option>김현지</option><option>장용훈</option><option>김혜련</option><option>기호성</option></optgroup>
+                </select>
+            </div>
+            <div class="date-range form-group">
+                <div><label>휴가 시작일</label><input type="date" id="startDate" min="2026-02-01" max="2026-02-28" value="2026-02-01"></div>
+                <div><label>휴가 종료일</label><input type="date" id="endDate" min="2026-02-01" max="2026-02-28" value="2026-02-01"></div>
+            </div>
+            <button id="addBtn" class="btn btn-primary" onclick="addVacationRange()">휴가 일정 등록 완료</button>
+            <div class="my-list"><span class="list-label">나의 2월 휴가 내역</span><div id="myVacationList"></div></div>
+        </div>
+
+        <div id="adminSection" class="view-section">
+            <div class="form-group"><label>관리자 비밀번호</label><input type="password" id="adminPassword" placeholder="••••"></div>
+            
+            <div class="admin-box">
+                <label>입력 마감 시간 설정</label>
+                <input type="datetime-local" id="deadlineInput" style="margin-bottom: 10px;">
+                <button class="btn btn-primary" style="padding: 10px; font-size: 0.9rem;" onclick="updateDeadline()">마감 시간 저장</button>
+            </div>
+
+            <button class="btn btn-primary" onclick="checkAdminAndGenerate()">✨ 공평한 당번표 생성</button>
+            
+            <div id="adminCalendar">
+                <span class="list-label" style="margin-top:24px;">📊 인원별 당번 배정 통계</span>
+                <table class="stats-table" id="statsTable">
+                    <thead><tr><th>팀</th><th>이름</th><th>배정 횟수</th></tr></thead>
+                    <tbody id="statsBody"></tbody>
+                </table>
+                <div class="calendar-grid" id="calendarBody"></div>
+            </div>
+            <button class="btn btn-reset" onclick="resetAllData()">🚨 모든 데이터 초기화</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const BIN_ID = '678a10b4ad19ca34f8ed1541';
+    const API_KEY = '$2a$10$7R4m3P0P6mG4U8G7z8yO7O7z8yO7z8yO7z8yO7z8yO7z8yO7z8yO7';
+    const ADMIN_PW = "1234";
+    
+    let vacations = [];
+    let deadlineTimestamp = null;
+
+    const devTeam = ["서형준", "김기항", "김근영", "박중언", "박서영", "강성우", "김현지", "장용훈", "김혜련", "기호성"];
+    const planTeam = ["김설희", "강용석", "문경난", "한일섭", "이은형"];
+
+    // 데이터 로드
+    async function loadData() {
+        try {
+            const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { headers: { 'X-Master-Key': API_KEY } });
+            const data = await res.json();
+            vacations = data.record.vacations || [];
+            deadlineTimestamp = data.record.deadline || new Date("2026-01-31T18:00:00").getTime();
+            
+            // 관리자 입력창 초기값 세팅
+            const d = new Date(deadlineTimestamp);
+            d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+            document.getElementById('deadlineInput').value = d.toISOString().slice(0, 16);
+            
+            filterMyVacations();
+        } catch(e) { console.error("데이터 로드 실패"); }
+    }
+
+    // 데이터 저장 (휴가 + 마감시간 포함)
+    async function saveData() {
+        await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-Master-Key': API_KEY },
+            body: JSON.stringify({ vacations, deadline: deadlineTimestamp })
+        });
+    }
+
+    // 마감 시간 업데이트
+    async function updateDeadline() {
+        if(document.getElementById('adminPassword').value !== ADMIN_PW) return alert('비밀번호가 올바르지 않습니다.');
+        const val = document.getElementById('deadlineInput').value;
+        if(!val) return alert('시간을 선택하세요.');
+        deadlineTimestamp = new Date(val).getTime();
+        await saveData();
+        alert('마감 시간이 저장되었습니다.');
+    }
+
+    // 타이머
+    function updateTimer() {
+        if (!deadlineTimestamp) return;
+        const now = new Date().getTime();
+        const dist = deadlineTimestamp - now;
+        const btn = document.getElementById("addBtn");
+        
+        if (dist < 0) {
+            document.getElementById("timerBanner").innerHTML = "🔒 입력 기간이 마감되었습니다.";
+            btn.disabled = true;
+            btn.innerText = "입력 마감";
+            return;
+        }
+        
+        const d = Math.floor(dist / 86400000);
+        const h = Math.floor((dist % 86400000) / 3600000);
+        const m = Math.floor((dist % 3600000) / 60000);
+        const s = Math.floor((dist % 60000) / 1000);
+        document.getElementById("ddayTimer").innerHTML = `${d}일 ${h}시간 ${m}분 ${s}초`;
+        btn.disabled = false;
+        btn.innerText = "휴가 일정 등록 완료";
+    }
+    setInterval(updateTimer, 1000);
+
+    // 모드 전환
+    function switchMode(m) {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+        if(m === 'team') { document.getElementById('btnTeam').classList.add('active'); document.getElementById('teamSection').classList.add('active'); }
+        else { document.getElementById('btnAdmin').classList.add('active'); document.getElementById('adminSection').classList.add('active'); }
+    }
+
+    // 휴가 등록
+    async function addVacationRange() {
+        const name = document.getElementById('myNameSelect').value;
+        const start = new Date(document.getElementById('startDate').value);
+        const end = new Date(document.getElementById('endDate').value);
+        if (start > end) return alert('시작일이 종료일보다 늦을 수 없습니다.');
+        let cur = new Date(start);
+        while (cur <= end) {
+            const d = cur.getDate();
+            if (!vacations.some(v => v.name === name && v.date === d)) vacations.push({ name, date: d });
+            cur.setDate(cur.getDate() + 1);
+        }
+        await saveData(); filterMyVacations(); alert('등록 완료');
+    }
+
+    // 내 내역 필터링
+    function filterMyVacations() {
+        const name = document.getElementById('myNameSelect').value;
+        const myList = vacations.filter(v => v.name === name).sort((a,b) => a.date - b.date);
+        document.getElementById('myVacationList').innerHTML = myList.map(v => `
+            <div class="v-item"><span class="v-date">2월 ${v.date}일</span>
+            <button class="del-btn" onclick="removeVacation('${v.name}', ${v.date})">삭제</button></div>
+        `).join('') || "<p style='text-align:center; font-size:0.8rem; color:#94a3b8;'>내역 없음</p>";
+    }
+
+    async function removeVacation(n, d) { 
+        if(!confirm('삭제?')) return; 
+        vacations = vacations.filter(v => !(v.name === n && v.date === d)); 
+        await saveData(); filterMyVacations(); 
+    }
+
+    function checkAdminAndGenerate() {
+        if(document.getElementById('adminPassword').value === ADMIN_PW) { 
+            document.getElementById('adminCalendar').style.display = 'block'; generateFairSchedule(); 
+        } else { alert('비밀번호 오류'); }
+    }
+
+    function generateFairSchedule() {
+        const cont = document.getElementById('calendarBody'); cont.innerHTML = '';
+        const statsBody = document.getElementById('statsBody'); statsBody.innerHTML = '';
+        let counts = {}; [...devTeam, ...planTeam].forEach(name => counts[name] = 0);
+        let lastDev = "", lastPlan = "";
+        for (let i = 1; i <= 28; i++) {
+            const date = new Date(2026, 1, i);
+            const isWeekend = (date.getDay() === 0 || date.getDay() === 6);
+            const isHoli = [16, 17, 18].includes(i);
+            const div = document.createElement('div'); div.className = 'day';
+            div.innerHTML = `<span>${i}</span>`;
+            if (!isWeekend && !isHoli) {
+                const todayVaca = vacations.filter(v => v.date === i).map(v => v.name);
+                const availDev = devTeam.filter(n => !todayVaca.includes(n) && n !== lastDev).sort((a, b) => counts[a] - counts[b]);
+                const availPlan = planTeam.filter(n => !todayVaca.includes(n) && n !== lastPlan).sort((a, b) => counts[a] - counts[b]);
+                if(availDev.length > 0 && availPlan.length > 0) {
+                    const d = availDev[0]; const p = availPlan[0];
+                    div.innerHTML += `<span class="duty">💻 ${d}</span><span class="duty">📝 ${p}</span>`;
+                    counts[d]++; counts[p]++; lastDev = d; lastPlan = p;
+                }
+            } else if (isHoli) { div.innerHTML += `<span style="color:red; font-size:0.5rem; font-weight:bold;">설연휴</span>`; }
+            cont.appendChild(div);
+        }
+        const all = [...planTeam.map(n => ({t: '기획', n})), ...devTeam.map(n => ({t: '개발', n}))];
+        statsBody.innerHTML = all.map(m => `<tr><td>${m.t}</td><td>${m.n}</td><td>${counts[m.n]}회</td></tr>`).join('');
+    }
+
+    async function resetAllData() {
+        if(document.getElementById('adminPassword').value !== ADMIN_PW) return alert('비번 오류');
+        if(confirm('🚨 초기화하시겠습니까?')) { vacations = []; await saveData(); filterMyVacations(); alert('완료'); }
+    }
+
+    window.onload = loadData;
+</script>
+</body>
+</html>
