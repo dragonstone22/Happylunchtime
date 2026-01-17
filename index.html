@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WM 점심 당번 시스템</title>
+    <title>이번달 점심당번은 누구?</title>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -19,7 +19,7 @@
         .app-container { width: 100%; max-width: 520px; }
 
         .sidebar { background: var(--card-bg); padding: 32px 24px; border-radius: 28px; border: 1px solid var(--border); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
-        .logo { font-weight: 800; font-size: 1.6rem; margin-bottom: 20px; color: var(--primary); text-align: center; }
+        .logo { font-weight: 800; font-size: 1.6rem; margin-bottom: 20px; color: var(--primary); text-align: center; cursor: pointer; }
         
         .timer-banner { background: #fff1f2; color: var(--accent); padding: 12px; border-radius: 14px; margin-bottom: 24px; text-align: center; font-weight: 800; font-size: 0.85rem; border: 1px solid #fecdd3; }
 
@@ -45,9 +45,7 @@
         .del-btn { color: var(--accent); background: #fff1f2; padding: 6px 10px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.75rem; font-weight: 700; }
 
         .admin-box { background: #f1f5f9; padding: 15px; border-radius: 16px; margin-bottom: 20px; border: 1px solid var(--border); }
-
-        /* 전체 휴가 현황 보드 */
-        .all-vacation-board { background: #ffffff; border: 1px solid var(--border); border-radius: 14px; padding: 12px; max-height: 200px; overflow-y: auto; margin-bottom: 20px; font-size: 0.8rem; }
+        .all-vacation-board { background: #ffffff; border: 1px solid var(--border); border-radius: 14px; padding: 12px; max-height: 250px; overflow-y: auto; margin-bottom: 20px; font-size: 0.8rem; }
         .v-badge { display: inline-block; background: var(--primary-light); color: var(--primary); padding: 4px 8px; border-radius: 6px; margin: 2px; font-weight: 600; }
 
         .stats-table { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 0.8rem; background: #f8fafc; border-radius: 12px; overflow: hidden; }
@@ -59,13 +57,17 @@
         .day { background: white; padding: 4px; min-height: 70px; display: flex; flex-direction: column; align-items: center; }
         .day span { font-size: 0.7rem; font-weight: 700; margin-bottom: 2px; }
         .duty { font-size: 0.55rem; background: var(--primary-light); color: var(--primary); padding: 1px 3px; border-radius: 3px; margin-top: 1px; width: 100%; text-align: center; }
+        
+        .loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.7); z-index: 1000; justify-content: center; align-items: center; font-weight: bold; color: var(--primary); }
     </style>
 </head>
 <body>
 
+<div id="loadingOverlay" class="loading-overlay">데이터를 동기화 중입니다...</div>
+
 <div class="app-container">
     <div class="sidebar">
-        <div class="logo">🏦 WM 점심 당번 시스템</div>
+        <div class="logo" onclick="loadData()">🏦 WM 점심 당번 시스템</div>
         <div id="timerBanner" class="timer-banner">⏳ 마감까지 <span id="ddayTimer">데이터 로딩 중...</span></div>
         
         <div class="mode-selector">
@@ -93,7 +95,7 @@
             
             <div id="adminControls" style="display:none;">
                 <span class="list-label">📅 현재 전체 휴가 등록 현황</span>
-                <div class="all-vacation-board" id="allVacationBoard">로딩 중...</div>
+                <div class="all-vacation-board" id="allVacationBoard">등록된 데이터가 없습니다.</div>
 
                 <div class="admin-box">
                     <label>입력 마감 시간 설정</label>
@@ -124,13 +126,21 @@
     
     let vacations = [];
     let deadlineTimestamp = null;
-
     const devTeam = ["서형준", "김기항", "김근영", "박중언", "박서영", "강성우", "김현지", "장용훈", "김혜련", "기호성"];
     const planTeam = ["김설희", "강용석", "문경난", "한일섭", "이은형"];
 
+    // 로딩 오버레이 제어
+    function showLoading(show) {
+        document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+    }
+
     async function loadData() {
+        showLoading(true);
         try {
-            const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { headers: { 'X-Master-Key': API_KEY } });
+            const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest?nocache=${Date.now()}`, { 
+                headers: { 'X-Master-Key': API_KEY } 
+            });
+            if (!res.ok) throw new Error("서버 응답 오류");
             const data = await res.json();
             vacations = data.record.vacations || [];
             deadlineTimestamp = data.record.deadline || new Date("2026-01-31T18:00:00").getTime();
@@ -140,31 +150,31 @@
             document.getElementById('deadlineInput').value = d.toISOString().slice(0, 16);
             
             filterMyVacations();
-            renderAllVacations(); // 전체 현황 렌더링
-        } catch(e) { console.error("데이터 로드 실패"); }
+            renderAllVacations();
+        } catch(e) { 
+            alert("데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+            console.error(e);
+        } finally {
+            showLoading(false);
+        }
     }
 
-    // 관리자 비번 입력 시 화면 보이기
     function toggleAdminView() {
         const pw = document.getElementById('adminPassword').value;
         document.getElementById('adminControls').style.display = (pw === ADMIN_PW) ? 'block' : 'none';
     }
 
-    // 전체 휴가 현황 렌더링
     function renderAllVacations() {
         const board = document.getElementById('allVacationBoard');
         if (vacations.length === 0) {
             board.innerHTML = "<p style='color:#94a3b8; text-align:center;'>등록된 휴가가 없습니다.</p>";
             return;
         }
-
-        // 이름별로 그룹화
         const grouped = vacations.reduce((acc, v) => {
             acc[v.name] = acc[v.name] || [];
             acc[v.name].push(v.date);
             return acc;
         }, {});
-
         let html = "";
         for (const name in grouped) {
             const dates = grouped[name].sort((a,b) => a-b).join('일, ') + '일';
@@ -174,12 +184,19 @@
     }
 
     async function saveData() {
-        await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', 'X-Master-Key': API_KEY },
-            body: JSON.stringify({ vacations, deadline: deadlineTimestamp })
-        });
-        renderAllVacations();
+        showLoading(true);
+        try {
+            await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-Master-Key': API_KEY },
+                body: JSON.stringify({ vacations, deadline: deadlineTimestamp })
+            });
+            renderAllVacations();
+        } catch(e) {
+            alert("데이터 저장에 실패했습니다.");
+        } finally {
+            showLoading(false);
+        }
     }
 
     async function updateDeadline() {
@@ -195,13 +212,11 @@
         const now = new Date().getTime();
         const dist = deadlineTimestamp - now;
         const btn = document.getElementById("addBtn");
-        
         if (dist < 0) {
             document.getElementById("timerBanner").innerHTML = "🔒 입력 기간이 마감되었습니다.";
             btn.disabled = true; btn.innerText = "입력 마감";
             return;
         }
-        
         const d = Math.floor(dist / 86400000);
         const h = Math.floor((dist % 86400000) / 3600000);
         const m = Math.floor((dist % 3600000) / 60000);
@@ -276,7 +291,7 @@
     }
 
     async function resetAllData() {
-        if(confirm('🚨 모든 휴가 데이터를 초기화하시겠습니까?')) { vacations = []; await saveData(); filterMyVacations(); alert('완료'); }
+        if(confirm('🚨 초기화?')) { vacations = []; await saveData(); filterMyVacations(); alert('완료'); }
     }
 
     window.onload = loadData;
