@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WM플랫폼부 점심 당번 시스템</title>
+    <title>WM 점심 당번 시스템</title>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -40,12 +40,15 @@
         .view-section { display: none; }
         .view-section.active { display: block; }
 
-        .my-list { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 24px; }
         .list-label { color: var(--primary); font-size: 0.9rem; font-weight: 800; margin-bottom: 12px; display: block; }
         .v-item { background: #f8fafc; padding: 12px 18px; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border: 1px solid var(--border); }
         .del-btn { color: var(--accent); background: #fff1f2; padding: 6px 10px; border-radius: 8px; border: none; cursor: pointer; font-size: 0.75rem; font-weight: 700; }
 
         .admin-box { background: #f1f5f9; padding: 15px; border-radius: 16px; margin-bottom: 20px; border: 1px solid var(--border); }
+
+        /* 전체 휴가 현황 보드 */
+        .all-vacation-board { background: #ffffff; border: 1px solid var(--border); border-radius: 14px; padding: 12px; max-height: 200px; overflow-y: auto; margin-bottom: 20px; font-size: 0.8rem; }
+        .v-badge { display: inline-block; background: var(--primary-light); color: var(--primary); padding: 4px 8px; border-radius: 6px; margin: 2px; font-weight: 600; }
 
         .stats-table { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 0.8rem; background: #f8fafc; border-radius: 12px; overflow: hidden; }
         .stats-table th, .stats-table td { padding: 10px; border: 1px solid var(--border); text-align: center; }
@@ -82,29 +85,34 @@
                 <div><label>휴가 종료일</label><input type="date" id="endDate" min="2026-02-01" max="2026-02-28" value="2026-02-01"></div>
             </div>
             <button id="addBtn" class="btn btn-primary" onclick="addVacationRange()">휴가 일정 등록 완료</button>
-            <div class="my-list"><span class="list-label">나의 2월 휴가 내역</span><div id="myVacationList"></div></div>
+            <div class="my-list" style="margin-top:24px;"><span class="list-label">나의 2월 휴가 내역</span><div id="myVacationList"></div></div>
         </div>
 
         <div id="adminSection" class="view-section">
-            <div class="form-group"><label>관리자 비밀번호</label><input type="password" id="adminPassword" placeholder="••••"></div>
+            <div class="form-group"><label>관리자 비밀번호</label><input type="password" id="adminPassword" placeholder="••••" oninput="toggleAdminView()"></div>
             
-            <div class="admin-box">
-                <label>입력 마감 시간 설정</label>
-                <input type="datetime-local" id="deadlineInput" style="margin-bottom: 10px;">
-                <button class="btn btn-primary" style="padding: 10px; font-size: 0.9rem;" onclick="updateDeadline()">마감 시간 저장</button>
-            </div>
+            <div id="adminControls" style="display:none;">
+                <span class="list-label">📅 현재 전체 휴가 등록 현황</span>
+                <div class="all-vacation-board" id="allVacationBoard">로딩 중...</div>
 
-            <button class="btn btn-primary" onclick="checkAdminAndGenerate()">✨ 공평한 당번표 생성</button>
-            
-            <div id="adminCalendar">
-                <span class="list-label" style="margin-top:24px;">📊 인원별 당번 배정 통계</span>
-                <table class="stats-table" id="statsTable">
-                    <thead><tr><th>팀</th><th>이름</th><th>배정 횟수</th></tr></thead>
-                    <tbody id="statsBody"></tbody>
-                </table>
-                <div class="calendar-grid" id="calendarBody"></div>
+                <div class="admin-box">
+                    <label>입력 마감 시간 설정</label>
+                    <input type="datetime-local" id="deadlineInput" style="margin-bottom: 10px;">
+                    <button class="btn btn-primary" style="padding: 10px; font-size: 0.9rem;" onclick="updateDeadline()">마감 시간 저장</button>
+                </div>
+
+                <button class="btn btn-primary" onclick="generateFairSchedule()">✨ 공평한 당번표 생성 및 조회</button>
+                
+                <div id="adminCalendar">
+                    <span class="list-label" style="margin-top:24px;">📊 인원별 당번 배정 통계</span>
+                    <table class="stats-table" id="statsTable">
+                        <thead><tr><th>팀</th><th>이름</th><th>배정 횟수</th></tr></thead>
+                        <tbody id="statsBody"></tbody>
+                    </table>
+                    <div class="calendar-grid" id="calendarBody"></div>
+                </div>
+                <button class="btn btn-reset" onclick="resetAllData()">🚨 모든 데이터 초기화</button>
             </div>
-            <button class="btn btn-reset" onclick="resetAllData()">🚨 모든 데이터 초기화</button>
         </div>
     </div>
 </div>
@@ -120,7 +128,6 @@
     const devTeam = ["서형준", "김기항", "김근영", "박중언", "박서영", "강성우", "김현지", "장용훈", "김혜련", "기호성"];
     const planTeam = ["김설희", "강용석", "문경난", "한일섭", "이은형"];
 
-    // 데이터 로드
     async function loadData() {
         try {
             const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { headers: { 'X-Master-Key': API_KEY } });
@@ -128,27 +135,54 @@
             vacations = data.record.vacations || [];
             deadlineTimestamp = data.record.deadline || new Date("2026-01-31T18:00:00").getTime();
             
-            // 관리자 입력창 초기값 세팅
             const d = new Date(deadlineTimestamp);
             d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
             document.getElementById('deadlineInput').value = d.toISOString().slice(0, 16);
             
             filterMyVacations();
+            renderAllVacations(); // 전체 현황 렌더링
         } catch(e) { console.error("데이터 로드 실패"); }
     }
 
-    // 데이터 저장 (휴가 + 마감시간 포함)
+    // 관리자 비번 입력 시 화면 보이기
+    function toggleAdminView() {
+        const pw = document.getElementById('adminPassword').value;
+        document.getElementById('adminControls').style.display = (pw === ADMIN_PW) ? 'block' : 'none';
+    }
+
+    // 전체 휴가 현황 렌더링
+    function renderAllVacations() {
+        const board = document.getElementById('allVacationBoard');
+        if (vacations.length === 0) {
+            board.innerHTML = "<p style='color:#94a3b8; text-align:center;'>등록된 휴가가 없습니다.</p>";
+            return;
+        }
+
+        // 이름별로 그룹화
+        const grouped = vacations.reduce((acc, v) => {
+            acc[v.name] = acc[v.name] || [];
+            acc[v.name].push(v.date);
+            return acc;
+        }, {});
+
+        let html = "";
+        for (const name in grouped) {
+            const dates = grouped[name].sort((a,b) => a-b).join('일, ') + '일';
+            html += `<div style="margin-bottom:8px;"><strong>${name}</strong>: <span class="v-badge">${dates}</span></div>`;
+        }
+        board.innerHTML = html;
+    }
+
     async function saveData() {
         await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'X-Master-Key': API_KEY },
             body: JSON.stringify({ vacations, deadline: deadlineTimestamp })
         });
+        renderAllVacations();
     }
 
-    // 마감 시간 업데이트
     async function updateDeadline() {
-        if(document.getElementById('adminPassword').value !== ADMIN_PW) return alert('비밀번호가 올바르지 않습니다.');
         const val = document.getElementById('deadlineInput').value;
         if(!val) return alert('시간을 선택하세요.');
         deadlineTimestamp = new Date(val).getTime();
@@ -156,7 +190,6 @@
         alert('마감 시간이 저장되었습니다.');
     }
 
-    // 타이머
     function updateTimer() {
         if (!deadlineTimestamp) return;
         const now = new Date().getTime();
@@ -165,8 +198,7 @@
         
         if (dist < 0) {
             document.getElementById("timerBanner").innerHTML = "🔒 입력 기간이 마감되었습니다.";
-            btn.disabled = true;
-            btn.innerText = "입력 마감";
+            btn.disabled = true; btn.innerText = "입력 마감";
             return;
         }
         
@@ -175,12 +207,10 @@
         const m = Math.floor((dist % 3600000) / 60000);
         const s = Math.floor((dist % 60000) / 1000);
         document.getElementById("ddayTimer").innerHTML = `${d}일 ${h}시간 ${m}분 ${s}초`;
-        btn.disabled = false;
-        btn.innerText = "휴가 일정 등록 완료";
+        btn.disabled = false; btn.innerText = "휴가 일정 등록 완료";
     }
     setInterval(updateTimer, 1000);
 
-    // 모드 전환
     function switchMode(m) {
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
@@ -188,7 +218,6 @@
         else { document.getElementById('btnAdmin').classList.add('active'); document.getElementById('adminSection').classList.add('active'); }
     }
 
-    // 휴가 등록
     async function addVacationRange() {
         const name = document.getElementById('myNameSelect').value;
         const start = new Date(document.getElementById('startDate').value);
@@ -203,7 +232,6 @@
         await saveData(); filterMyVacations(); alert('등록 완료');
     }
 
-    // 내 내역 필터링
     function filterMyVacations() {
         const name = document.getElementById('myNameSelect').value;
         const myList = vacations.filter(v => v.name === name).sort((a,b) => a.date - b.date);
@@ -219,13 +247,8 @@
         await saveData(); filterMyVacations(); 
     }
 
-    function checkAdminAndGenerate() {
-        if(document.getElementById('adminPassword').value === ADMIN_PW) { 
-            document.getElementById('adminCalendar').style.display = 'block'; generateFairSchedule(); 
-        } else { alert('비밀번호 오류'); }
-    }
-
     function generateFairSchedule() {
+        document.getElementById('adminCalendar').style.display = 'block';
         const cont = document.getElementById('calendarBody'); cont.innerHTML = '';
         const statsBody = document.getElementById('statsBody'); statsBody.innerHTML = '';
         let counts = {}; [...devTeam, ...planTeam].forEach(name => counts[name] = 0);
@@ -253,8 +276,7 @@
     }
 
     async function resetAllData() {
-        if(document.getElementById('adminPassword').value !== ADMIN_PW) return alert('비번 오류');
-        if(confirm('🚨 초기화하시겠습니까?')) { vacations = []; await saveData(); filterMyVacations(); alert('완료'); }
+        if(confirm('🚨 모든 휴가 데이터를 초기화하시겠습니까?')) { vacations = []; await saveData(); filterMyVacations(); alert('완료'); }
     }
 
     window.onload = loadData;
